@@ -13,6 +13,7 @@ function App() {
     const [password, setPassword] = useState('');
     const [isLogin, setIsLogin] = useState(true);
     const [isAdmin, setIsAdmin] = useState(false);
+    const [showPrivateOnly, setShowPrivateOnly] = useState(false);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -75,7 +76,8 @@ function App() {
             completed: false,
             createdBy: user.email,
             createdAt: Date.now(),
-            updatedAt: Date.now()
+            updatedAt: Date.now(),
+            visibility: 'public'
         });
         setNewTodo('');
     };
@@ -84,6 +86,14 @@ function App() {
         const todoRef = doc(db, 'todos', todo.id);
         await updateDoc(todoRef, {
             completed: !todo.completed,
+            updatedAt: Date.now()
+        });
+    };
+
+    const toggleVisibility = async (todo: Todo) => {
+        const todoRef = doc(db, 'todos', todo.id);
+        await updateDoc(todoRef, {
+            visibility: todo.visibility === 'public' ? 'private' : 'public',
             updatedAt: Date.now()
         });
     };
@@ -98,6 +108,13 @@ function App() {
         }
         await deleteDoc(doc(db, 'todos', id));
     };
+
+    const filteredTodos = todos.filter(todo => {
+        if (showPrivateOnly) {
+            return todo.createdBy === user?.email && todo.visibility === 'private';
+        }
+        return todo.visibility === 'public' || todo.createdBy === user?.email;
+    });
 
     if (!user) {
         return (
@@ -139,7 +156,22 @@ function App() {
                     <button onClick={handleLogout}>Abmelden</button>
                 </div>
             </header>
-            
+
+            <div className="filter-buttons">
+                <button
+                    className={!showPrivateOnly ? 'active' : ''}
+                    onClick={() => setShowPrivateOnly(false)}
+                >
+                    Alle anzeigen
+                </button>
+                <button
+                    className={showPrivateOnly ? 'active' : ''}
+                    onClick={() => setShowPrivateOnly(true)}
+                >
+                    Nur meine privaten
+                </button>
+            </div>
+
             <form onSubmit={addTodo} className="add-todo">
                 <input
                     type="text"
@@ -151,7 +183,7 @@ function App() {
             </form>
 
             <ul className="todo-list">
-                {todos.map((todo) => (
+                {filteredTodos.map((todo) => (
                     <li key={todo.id} className={todo.completed ? 'completed' : ''}>
                         <input
                             type="checkbox"
@@ -159,7 +191,21 @@ function App() {
                             onChange={() => toggleTodo(todo)}
                         />
                         <span>{todo.text}</span>
-                        <small>von {todo.createdBy}</small>
+                        <div className="todo-meta">
+                            <small>von {todo.createdBy}</small>
+                            <span className={'visibility-badge ' + todo.visibility}>
+                {todo.visibility === 'public' ? '👥 Öffentlich' : '🔒 Privat'}
+              </span>
+                        </div>
+                        {todo.createdBy === user.email && (
+                            <button
+                                className="visibility-btn"
+                                onClick={() => toggleVisibility(todo)}
+                                title={todo.visibility === 'public' ? 'Als privat markieren' : 'Als öffentlich markieren'}
+                            >
+                                {todo.visibility === 'public' ? '🔒' : '👥'}
+                            </button>
+                        )}
                         <button onClick={() => deleteTodo(todo.id)}>Löschen</button>
                     </li>
                 ))}

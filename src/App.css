@@ -41,6 +41,26 @@ header {
     align-items: center;
 }
 
+.filter-buttons {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.filter-buttons button {
+    flex: 1;
+    padding: 10px;
+    background: white;
+    color: #333;
+    border: 2px solid #ddd;
+}
+
+.filter-buttons button.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
 .auth-container {
     max-width: 400px;
     margin: 100px auto;
@@ -107,13 +127,48 @@ button:hover {
     opacity: 0.6;
 }
 
-.todo-list li span {
+.todo-list li > span {
     flex: 1;
 }
 
-.todo-list li small {
+.todo-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-end;
+}
+
+.todo-meta small {
     color: #666;
     font-size: 12px;
+}
+
+.visibility-badge {
+    font-size: 12px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+}
+
+.visibility-badge.public {
+    background: #d4edda;
+    color: #155724;
+}
+
+.visibility-badge.private {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.visibility-btn {
+    padding: 8px 12px;
+    background: #6c757d;
+    font-size: 16px;
+    min-width: auto;
+}
+
+.visibility-btn:hover {
+    background: #5a6268;
 }
 
 .todo-list li button {

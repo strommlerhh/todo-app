@@ -5,6 +5,7 @@ export interface Todo {
   createdBy: string;
   createdAt: number;
   updatedAt: number;
+  visibility: 'private' | 'public';
 }
 
 export interface User {
