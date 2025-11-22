@@ -1,6 +1,6 @@
-# Familien To-Do Liste
+# Family TODO App
 
-Eine einfache, synchronisierte To-Do-Liste für die Familie mit React, TypeScript und Firebase.
+A simple synchronized todo app for families with React, TypeScript and Firebase
 
 ## Features
 

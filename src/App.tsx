@@ -1,31 +1,33 @@
-import {useEffect, useState} from 'react';
-import {createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signOut} from 'firebase/auth';
-import {addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc} from 'firebase/firestore';
-import {auth, db} from './firebase';
-import {Todo, User} from './types';
+import React, {useEffect, useState} from 'react';
+import {onAuthStateChanged, signInWithEmailAndPassword, signOut} from 'firebase/auth';
+import {auth} from './firebase';
 import './App.css';
+import {User} from "./types/user.ts";
+import {NewTodo, Todo} from "./types/todo.ts";
+import {userService} from "./services/userService.ts";
+import {todoService} from "./services/todoService.ts";
+import {groupService} from "./services/groupService.ts";
+import {Group} from "./types/group.ts";
 
 function App() {
     const [user, setUser] = useState<User | null>(null);
+    const [userGroups, setUserGroups] = useState<Group[]>([]);
     const [todos, setTodos] = useState<Todo[]>([]);
     const [newTodo, setNewTodo] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [isLogin, setIsLogin] = useState(true);
     const [isAdmin, setIsAdmin] = useState(false);
-    const [showPrivateOnly, setShowPrivateOnly] = useState(false);
+    // const [showPrivateOnly, setShowPrivateOnly] = useState(false);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             if (currentUser) {
-                setUser({
-                    uid: currentUser.uid,
-                    email: currentUser.email,
-                    displayName: currentUser.displayName
-                });
-
+                await currentUser.getIdToken(true);
+                const user = await userService.getUser(currentUser.uid);
+                console.log("authenticated: ", user);
                 // Check if user is admin
                 const tokenResult = await currentUser.getIdTokenResult();
+                setUser(user);
                 setIsAdmin(tokenResult.claims.admin === true);
             } else {
                 setUser(null);
@@ -37,31 +39,26 @@ function App() {
 
     useEffect(() => {
         if (!user) return;
-
-        const q = query(collection(db, 'todos'), orderBy('createdAt', 'desc'));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const todosData: Todo[] = [];
-            snapshot.forEach((doc) => {
-                todosData.push({id: doc.id, ...doc.data()} as Todo);
-            });
-            setTodos(todosData);
-        });
-
+        const unsubscribe = groupService.getUserGroups(user.uid, user.familyId, setUserGroups);
         return () => unsubscribe();
     }, [user]);
+
+    useEffect(() => {
+        if (!user || !userGroups) return;
+        const groupIds = userGroups.map((group) => group.groupId);
+        const unsubscribe = todoService.getUserVisibleTodos(user.familyId, groupIds, setTodos);
+        return () => unsubscribe();
+    }, [userGroups]);
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            if (isLogin) {
-                await signInWithEmailAndPassword(auth, email, password);
-            } else {
-                await createUserWithEmailAndPassword(auth, email, password);
-            }
+            console.log("signing in for " + email);
+            await signInWithEmailAndPassword(auth, email, password);
             setEmail('');
             setPassword('');
         } catch (error) {
-            alert('Fehler: ' + (error as Error).message);
+            alert('Error: ' + (error as Error).message);
         }
     };
 
@@ -71,50 +68,51 @@ function App() {
         e.preventDefault();
         if (!newTodo.trim() || !user) return;
 
-        await addDoc(collection(db, 'todos'), {
-            text: newTodo,
-            completed: false,
-            createdBy: user.email,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            visibility: 'public'
-        });
+        await todoService.createTodo({
+            userId: user.uid,
+            familyId: user.familyId,
+            categoryId: null,
+            groupIds: [],
+            description: newTodo,
+            effortLevel: 1,
+            dueDate: null,
+            priority: 'low',
+            subtasks: [],
+            reminderTime: null,
+            recurrence: null,
+            attachments: [],
+            tags: [],
+            notes: null
+        } as NewTodo);
+
         setNewTodo('');
     };
 
-    const toggleTodo = async (todo: Todo) => {
-        const todoRef = doc(db, 'todos', todo.id);
-        await updateDoc(todoRef, {
-            completed: !todo.completed,
-            updatedAt: Date.now()
-        });
+    const completeTodo = async (todo: Todo) => {
+        if (!user) {
+            return;
+        }
+        await todoService.completeTodo(todo.todoId, user.uid);
     };
 
-    const toggleVisibility = async (todo: Todo) => {
-        const todoRef = doc(db, 'todos', todo.id);
-        await updateDoc(todoRef, {
-            visibility: todo.visibility === 'public' ? 'private' : 'public',
-            updatedAt: Date.now()
-        });
-    };
+    // const toggleVisibility = async (todo: Todo) => {
+    //     const todoRef = doc(db, 'todos', todo.id);
+    //     await updateDoc(todoRef, {
+    //         visibility: todo.visibility === 'public' ? 'private' : 'public',
+    //         updatedAt: Date.now()
+    //     });
+    // };
 
     const deleteTodo = async (id: string) => {
-        if (!isAdmin) {
-            const todo = todos.find(t => t.id === id);
-            if (todo && todo.createdBy !== user?.email) {
-                alert('Only admins can delete other users\' todos');
-                return;
-            }
-        }
-        await deleteDoc(doc(db, 'todos', id));
+        await todoService.deleteTodo(id);
     };
 
-    const filteredTodos = todos.filter(todo => {
-        if (showPrivateOnly) {
-            return todo.createdBy === user?.email && todo.visibility === 'private';
-        }
-        return todo.visibility === 'public' || todo.createdBy === user?.email;
-    });
+    // const filteredTodos = todos.filter(todo => {
+    //     if (showPrivateOnly) {
+    //         return todo.createdBy === user?.email && todo.visibility === 'private';
+    //     }
+    //     return todo.visibility === 'public' || todo.createdBy === user?.email;
+    // });
 
     if (!user) {
         return (
@@ -136,16 +134,14 @@ function App() {
                             onChange={(e) => setPassword(e.target.value)}
                             required
                         />
-                        <button type="submit">{isLogin ? 'Anmelden' : 'Registrieren'}</button>
+                        <button type="submit">Anmelden</button>
                     </form>
-                    <button onClick={() => setIsLogin(!isLogin)}>
-                        {isLogin ? 'Noch kein Account? Registrieren' : 'Schon registriert? Anmelden'}
-                    </button>
                 </div>
             </div>
         );
     }
 
+    console.log("rendering", todos)
     return (
         <div className="app">
             <header>
@@ -157,20 +153,20 @@ function App() {
                 </div>
             </header>
 
-            <div className="filter-buttons">
-                <button
-                    className={!showPrivateOnly ? 'active' : ''}
-                    onClick={() => setShowPrivateOnly(false)}
-                >
-                    Alle anzeigen
-                </button>
-                <button
-                    className={showPrivateOnly ? 'active' : ''}
-                    onClick={() => setShowPrivateOnly(true)}
-                >
-                    Nur meine privaten
-                </button>
-            </div>
+            {/*<div className="filter-buttons">*/}
+            {/*    <button*/}
+            {/*        className={!showPrivateOnly ? 'active' : ''}*/}
+            {/*        onClick={() => setShowPrivateOnly(false)}*/}
+            {/*    >*/}
+            {/*        Alle anzeigen*/}
+            {/*    </button>*/}
+            {/*    <button*/}
+            {/*        className={showPrivateOnly ? 'active' : ''}*/}
+            {/*        onClick={() => setShowPrivateOnly(true)}*/}
+            {/*    >*/}
+            {/*        Nur meine privaten*/}
+            {/*    </button>*/}
+            {/*</div>*/}
 
             <form onSubmit={addTodo} className="add-todo">
                 <input
@@ -183,30 +179,31 @@ function App() {
             </form>
 
             <ul className="todo-list">
-                {filteredTodos.map((todo) => (
-                    <li key={todo.id} className={todo.completed ? 'completed' : ''}>
+                {todos.map((todo) => (
+                    <li key={todo.todoId} className={todo.isCompleted ? 'completed' : ''}>
                         <input
                             type="checkbox"
-                            checked={todo.completed}
-                            onChange={() => toggleTodo(todo)}
+                            checked={todo.isCompleted}
+                            disabled={todo.isCompleted}
+                            onChange={() => completeTodo(todo)}
                         />
-                        <span>{todo.text}</span>
+                        <span>{todo.description}</span>
                         <div className="todo-meta">
-                            <small>von {todo.createdBy}</small>
-                            <span className={'visibility-badge ' + todo.visibility}>
-                {todo.visibility === 'public' ? '👥 Öffentlich' : '🔒 Privat'}
-              </span>
+                            <small>von {todo.userId}</small>
+                            {/*              <span className={'visibility-badge ' + todo.visibility}>*/}
+                            {/*  {todo.visibility === 'public' ? '👥 Öffentlich' : '🔒 Privat'}*/}
+                            {/*</span>*/}
                         </div>
-                        {todo.createdBy === user.email && (
-                            <button
-                                className="visibility-btn"
-                                onClick={() => toggleVisibility(todo)}
-                                title={todo.visibility === 'public' ? 'Als privat markieren' : 'Als öffentlich markieren'}
-                            >
-                                {todo.visibility === 'public' ? '🔒' : '👥'}
-                            </button>
-                        )}
-                        <button onClick={() => deleteTodo(todo.id)}>Löschen</button>
+                        {/*{todo.createdBy === user.email && (*/}
+                        {/*    <button*/}
+                        {/*        className="visibility-btn"*/}
+                        {/*        onClick={() => toggleVisibility(todo)}*/}
+                        {/*        title={todo.visibility === 'public' ? 'Als privat markieren' : 'Als öffentlich markieren'}*/}
+                        {/*    >*/}
+                        {/*        {todo.visibility === 'public' ? '🔒' : '👥'}*/}
+                        {/*    </button>*/}
+                        {/*)}*/}
+                        <button onClick={() => deleteTodo(todo.todoId)}>Löschen</button>
                     </li>
                 ))}
             </ul>
