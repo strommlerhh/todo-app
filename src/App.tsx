@@ -88,11 +88,16 @@ function App() {
         setNewTodo('');
     };
 
-    const completeTodo = async (todo: Todo) => {
+    const toggleCompleteTodo = async (todo: Todo) => {
         if (!user) {
             return;
         }
-        await todoService.completeTodo(todo.todoId, user.uid);
+
+        if (todo.isCompleted) {
+            await todoService.uncompleteTodo(todo.todoId)
+        } else {
+            await todoService.completeTodo(todo.todoId, user.uid);
+        }
     };
 
     // const toggleVisibility = async (todo: Todo) => {
@@ -184,8 +189,7 @@ function App() {
                         <input
                             type="checkbox"
                             checked={todo.isCompleted}
-                            disabled={todo.isCompleted}
-                            onChange={() => completeTodo(todo)}
+                            onChange={() => toggleCompleteTodo(todo)}
                         />
                         <span>{todo.description}</span>
                         <div className="todo-meta">
