@@ -193,7 +193,15 @@ function App() {
                         />
                         <span>{todo.description}</span>
                         <div className="todo-meta">
-                            <small>von {todo.userId}</small>
+                            {todo.hasGroups &&
+                                <ul className={"todo-group-list"}>
+                                    {userGroups.filter(g => todo.groupIds.includes(g.groupId)) //
+                                        .map(group => (
+                                            <li key={group.groupId}>
+                                                <span>{group.name}</span>
+                                            </li>))}
+                                </ul>}
+                            <span className={"todo-created-by"}>von {todo.userId}</span>
                             {/*              <span className={'visibility-badge ' + todo.visibility}>*/}
                             {/*  {todo.visibility === 'public' ? '👥 Öffentlich' : '🔒 Privat'}*/}
                             {/*</span>*/}
@@ -207,7 +215,10 @@ function App() {
                         {/*        {todo.visibility === 'public' ? '🔒' : '👥'}*/}
                         {/*    </button>*/}
                         {/*)}*/}
-                        <button onClick={() => deleteTodo(todo.todoId)}>Löschen</button>
+                        <button
+                            title="delete"
+                            onClick={() => deleteTodo(todo.todoId)}>&#128465;
+                        </button>
                     </li>
                 ))}
             </ul>
