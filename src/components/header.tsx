@@ -8,15 +8,13 @@ interface HeaderProps {
     isAdmin: boolean;
 }
 
-const handleLogout = () => signOut(auth);
-
 export const Header: React.FC<HeaderProps> = (props) => {
     return <header>
         <h1>Familien To-Do Liste</h1>
         <div className="user-info">
             <span>{props.user.email}</span>
             {props.isAdmin && <span className="admin-badge">👑 Admin</span>}
-            <button onClick={handleLogout}>Abmelden</button>
+            <button onClick={() => signOut(auth)}>Abmelden</button>
         </div>
     </header>;
 }
