@@ -1,54 +1,23 @@
-import React, {useEffect, useState} from 'react';
-import {onAuthStateChanged, signInWithEmailAndPassword, signOut} from 'firebase/auth';
+import React, {useState} from 'react';
+import {signInWithEmailAndPassword} from 'firebase/auth';
 import {auth} from './firebase';
 import './App.css';
-import {User} from "./types/user.ts";
 import {NewTodo, Todo} from "./types/todo.ts";
-import {userService} from "./services/userService.ts";
 import {todoService} from "./services/todoService.ts";
-import {groupService} from "./services/groupService.ts";
-import {Group} from "./types/group.ts";
+import {Header} from "./components/header.tsx";
+import {useAuth} from "./hooks/useAuth.ts";
+import {useUserGroups} from "./hooks/useUserGroup.ts";
+import {useTodos} from "./hooks/useTodos.ts";
 
 function App() {
-    const [user, setUser] = useState<User | null>(null);
-    const [userGroups, setUserGroups] = useState<Group[]>([]);
-    const [todos, setTodos] = useState<Todo[]>([]);
+    const {user, isAdmin} = useAuth();
+    const userGroups = useUserGroups(user);
+    const todos = useTodos(user, userGroups);
+
     const [newTodo, setNewTodo] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [isAdmin, setIsAdmin] = useState(false);
     // const [showPrivateOnly, setShowPrivateOnly] = useState(false);
-
-    useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            if (currentUser) {
-                await currentUser.getIdToken(true);
-                const user = await userService.getUser(currentUser.uid);
-                console.log("authenticated: ", user);
-                // Check if user is admin
-                const tokenResult = await currentUser.getIdTokenResult();
-                setUser(user);
-                setIsAdmin(tokenResult.claims.admin === true);
-            } else {
-                setUser(null);
-                setIsAdmin(false);
-            }
-        });
-        return () => unsubscribe();
-    }, []);
-
-    useEffect(() => {
-        if (!user) return;
-        const unsubscribe = groupService.getUserGroups(user.uid, user.familyId, setUserGroups);
-        return () => unsubscribe();
-    }, [user]);
-
-    useEffect(() => {
-        if (!user || !userGroups) return;
-        const groupIds = userGroups.map((group) => group.groupId);
-        const unsubscribe = todoService.getUserVisibleTodos(user.familyId, groupIds, setTodos);
-        return () => unsubscribe();
-    }, [userGroups]);
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -61,8 +30,6 @@ function App() {
             alert('Error: ' + (error as Error).message);
         }
     };
-
-    const handleLogout = () => signOut(auth);
 
     const addTodo = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -149,15 +116,7 @@ function App() {
     console.log("rendering", todos)
     return (
         <div className="app">
-            <header>
-                <h1>Familien To-Do Liste</h1>
-                <div className="user-info">
-                    <span>{user.email}</span>
-                    {isAdmin && <span className="admin-badge">👑 Admin</span>}
-                    <button onClick={handleLogout}>Abmelden</button>
-                </div>
-            </header>
-
+            <Header user={user} isAdmin={isAdmin}/>
             {/*<div className="filter-buttons">*/}
             {/*    <button*/}
             {/*        className={!showPrivateOnly ? 'active' : ''}*/}
